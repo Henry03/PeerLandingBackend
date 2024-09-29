@@ -1,8 +1,10 @@
 ﻿using DAL.DTO.Req;
 using DAL.DTO.Res;
 using DAL.Repositories.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using System.Text;
 
 namespace BEPeer.Controllers
@@ -19,6 +21,7 @@ namespace BEPeer.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles="borrower")]
         public async Task<IActionResult> NewLoan(ReqLoanDto loan)
         {
             try
@@ -43,7 +46,9 @@ namespace BEPeer.Controllers
                     });
                 }
 
-                var res = await _loanServices.CreateLoan(loan);
+                var userId = HttpContext.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.Sid)?.Value;
+
+                var res = await _loanServices.CreateLoan(loan, userId);
 
                 return Ok(new ResBaseDto<string>
                 {
@@ -108,14 +113,42 @@ namespace BEPeer.Controllers
             }
         }
 
-        [HttpGet("status")]
-        public async Task<IActionResult> Loans(string status = "")
+        [HttpPost]
+        [Authorize(Roles = "lender")]
+        public async Task<IActionResult> Loans([FromBody] ReqQueryParametersDto parameter, [FromQuery] string status = "")
         {
             try
             {
-                var res = await _loanServices.GetLoanList(status);
+                var res = await _loanServices.GetLoanList(status, parameter);
 
-                return Ok(new ResBaseDto<List<ResListLoanDto>>
+                return Ok(new ResBaseDto<ResPagedResultDto<ResListLoanDto>>
+                {
+                    Success = true,
+                    Message = "Success get loan list",
+                    Data = res
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new ResBaseDto<string>
+                {
+                    Success = false,
+                    Message = ex.Message,
+                    Data = null
+                });
+            }
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "borrower")]
+        public async Task<IActionResult> LoansById([FromBody] ReqQueryParametersDto parameter, [FromQuery] string status = "")
+        {
+            try
+            {
+                var userId = HttpContext.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.Sid)?.Value;
+                var res = await _loanServices.GetLoanListById(status, userId, parameter);
+
+                return Ok(new ResBaseDto<ResPagedResultDto<ResListLoanDto>>
                 {
                     Success = true,
                     Message = "Success get loan list",

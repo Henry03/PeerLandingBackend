@@ -9,9 +9,6 @@ namespace DAL.DTO.Req
 {
     public class ReqLoanDto
     {
-        [Required(ErrorMessage = "BorrowerId is required")]
-        public string BorrowerId { get; set; }
-
         [Required(ErrorMessage = "Amount is required")]
         [Range(0, double.MaxValue, ErrorMessage = "Amount must be greater than 0")]
         public decimal Amount { get; set; }
@@ -20,7 +17,7 @@ namespace DAL.DTO.Req
         public decimal InterestRate { get; set; }
 
         [Required(ErrorMessage = "Duration is required")]
-        public int Duration { get; set; }
+        public int Duration { get; set; } = 12;
 
     }
 }

@@ -3,6 +3,7 @@ using System;
 using DAL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DAL.Migrations
 {
     [DbContext(typeof(PeerlendingContext))]
-    partial class PeerlendingContextModelSnapshot : ModelSnapshot
+    [Migration("20240928153702_CreateRepayment")]
+    partial class CreateRepayment
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -136,35 +139,6 @@ namespace DAL.Migrations
                     b.ToTable("trn_funding");
                 });
 
-            modelBuilder.Entity("DAL.Models.TrnInstallment", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("numeric")
-                        .HasColumnName("amount");
-
-                    b.Property<int>("Issue")
-                        .HasColumnType("integer")
-                        .HasColumnName("issue");
-
-                    b.Property<string>("LoanId")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("loan_id");
-
-                    b.Property<DateTime>("PaidAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("paid_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LoanId");
-
-                    b.ToTable("trn_installment");
-                });
-
             modelBuilder.Entity("DAL.Models.TrnRepayment", b =>
                 {
                     b.Property<string>("Id")
@@ -231,17 +205,6 @@ namespace DAL.Migrations
                     b.Navigation("Loan");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("DAL.Models.TrnInstallment", b =>
-                {
-                    b.HasOne("DAL.Models.MstLoans", "Loan")
-                        .WithMany()
-                        .HasForeignKey("LoanId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Loan");
                 });
 
             modelBuilder.Entity("DAL.Models.TrnRepayment", b =>

@@ -6,9 +6,11 @@ using System.Threading.Tasks;
 
 namespace DAL.DTO.Res
 {
-    public class ResLoginDto
+    public class ResRepaidDto
     {
-        public string Token { get; set; }
-        public string Role { get; set; }
+        public decimal Amount { get; set; }
+        public DateTime PaidDate { get; set; }
+
+
     }
 }

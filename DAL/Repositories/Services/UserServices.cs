@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
@@ -27,9 +28,32 @@ namespace DAL.Repositories.Services
             _configuration = configuration;
         }
 
-        public async Task<List<ResUserDto>> GetAllUsers()
+        public async Task<ResPagedResultDto<ResUserDto>> GetAllUsers(ReqQueryParametersDto parameter)
         {
-            return await _context.MstUsers
+            parameter.SortBy = String.IsNullOrEmpty(parameter.SortBy) ? "Name" : parameter.SortBy;
+            parameter.Ascending = parameter.Ascending ? parameter.Ascending : false;
+
+            var query = _context.MstUsers.Where(user => user.Role != "admin");
+
+            if (!string.IsNullOrEmpty(parameter.Search))
+            {
+                query = query.Where(user => user.Name.Contains(parameter.Search) ||
+                                            user.Email.Contains(parameter.Search));
+            }
+
+            query = parameter.SortBy.ToLower() switch
+            {
+                "email" => parameter.Ascending ? query.OrderBy(user => user.Email) : query.OrderByDescending(user => user.Email),
+                "role" => parameter.Ascending ? query.OrderBy(user => user.Role) : query.OrderByDescending(user => user.Role),
+                "balance" => parameter.Ascending ? query.OrderBy(user => user.Balance) : query.OrderByDescending(user => user.Balance),
+                _ => parameter.Ascending ? query.OrderBy(user => user.Name) : query.OrderByDescending(user => user.Name)
+            };
+
+            var totalItems = await query.CountAsync();
+
+            var pagedData = await query
+                .Skip((parameter.PageNumber - 1) * parameter.PageSize)
+                .Take(parameter.PageSize)
                 .Select(user => new ResUserDto
                 {
                     Id = user.Id,
@@ -38,8 +62,15 @@ namespace DAL.Repositories.Services
                     Role = user.Role,
                     Balance = user.Balance
                 })
-                .Where(user => user.Role != "Admin")
                 .ToListAsync();
+
+            return new ResPagedResultDto<ResUserDto>
+            {
+                Data = pagedData,
+                TotalItems = totalItems,
+                PageSize = parameter.PageSize,
+                PageNumber = parameter.PageNumber
+            };
         }
 
 
@@ -56,9 +87,9 @@ namespace DAL.Repositories.Services
             {
                 Name = register.Name,
                 Email = register.Email,
-                Password = BCrypt.Net.BCrypt.HashPassword(register.Password),
+                Password = BCrypt.Net.BCrypt.HashPassword("Password1"),
                 Role = register.Role,
-                Balance = register.Balance
+                Balance = 0
             };
 
             await _context.MstUsers.AddAsync(newUser);
@@ -84,7 +115,8 @@ namespace DAL.Repositories.Services
 
             var loginResponse = new ResLoginDto
             {
-                Token = token
+                Token = token,
+                Role = user.Role
             };
 
             return loginResponse;
@@ -103,6 +135,7 @@ namespace DAL.Repositories.Services
                 new Claim(JwtRegisteredClaimNames.Sub, user.Email),
                 new Claim(ClaimTypes.Name, user.Name),
                 new Claim(ClaimTypes.Role, user.Role),
+                new Claim(ClaimTypes.Sid, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 
@@ -135,6 +168,17 @@ namespace DAL.Repositories.Services
             return Task.FromResult("User updated successfully");
         }
 
+        public Task<String> TopUp(string id, decimal money)
+        {
+            var user = _context.MstUsers.Find(id);
+
+            user.Balance += money;
+
+            _context.SaveChanges();
+
+            return Task.FromResult("User updated successfully");
+        }
+
         public Task<String> DeleteUser(string id)
         {
             var user = _context.MstUsers.Find(id);
@@ -147,6 +191,24 @@ namespace DAL.Repositories.Services
             _context.SaveChanges();
 
             return Task.FromResult("User deleted successfully");
+        }
+
+        public Task<ResUserByIdDto> GetUserById(string id)
+        {
+            var user = _context.MstUsers.Find(id);
+
+            if (user == null)
+            {
+                throw new Exception("User not found");
+            }
+
+            return Task.FromResult(new ResUserByIdDto
+            {
+                Id = user.Id,
+                Name = user.Name,
+                Role = user.Role,
+                Balance = user.Balance
+            });
         }
     }
 }

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using System.Reflection.Metadata;
 using System.Security.Claims;
 using System.Text;
 
@@ -21,6 +22,7 @@ namespace BEPeer.Controllers
             _userServices = userServices;
         }
 
+        [Authorize(Roles = "admin")]
         [HttpPost]
         public async Task<IActionResult> Register(ReqRegisterUserDto register)
         {
@@ -59,11 +61,21 @@ namespace BEPeer.Controllers
             {
                 if(e.Message == "Email already used")
                 {
+                    ModelState.AddModelError("Email", e.Message); // Add model state error
+
+                    var errors = ModelState
+                        .Where(x => x.Value.Errors.Any())
+                        .Select(x => new
+                        {
+                            Field = x.Key,
+                            Messages = x.Value.Errors.Select(e => e.ErrorMessage).ToList()
+                        }).ToList();
+
                     return BadRequest(new ResBaseDto<object>
                     {
                         Success = false,
-                        Message = e.Message,
-                        Data = null
+                        Message = "Validation Errors Occurred!",
+                        Data = errors
                     });
                 }
 
@@ -76,15 +88,15 @@ namespace BEPeer.Controllers
             }
         }
 
-        [HttpGet]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> GetAllUsers()
+        [HttpPost]
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> GetAllUsers(ReqQueryParametersDto parameter)
         {
             try
             {
-                var users = await _userServices.GetAllUsers();
+                var users = await _userServices.GetAllUsers(parameter);
 
-                return Ok(new ResBaseDto<List<ResUserDto>>
+                return Ok(new ResBaseDto<ResPagedResultDto<ResUserDto>>
                 {
                     Success = true,
                     Message = "List of users",
@@ -139,7 +151,7 @@ namespace BEPeer.Controllers
         }
 
         [HttpPut("id")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> UpdateUser(ReqUpdateUserDto user, string id)
         {
             try
@@ -175,12 +187,12 @@ namespace BEPeer.Controllers
         }
 
         [HttpPut("id")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> User(ReqUpdateUserDto user, string id)
         {
             try
             {
-                //var res = await _userServices.UpdateUser(user, id);
+                var res = await _userServices.UpdateUser(user, id);
 
                 return Ok(new ResBaseDto<object>
                 {
@@ -212,7 +224,7 @@ namespace BEPeer.Controllers
 
 
         [HttpDelete("id")]
-        [Authorize(Roles = "Admin")]    
+        [Authorize(Roles = "admin")]    
         public async Task<IActionResult> DeleteUser(string id)
         {
             try
@@ -223,6 +235,137 @@ namespace BEPeer.Controllers
                 {
                     Success = true,
                     Message = "User deleted successfully",
+                    Data = res
+                });
+            }
+            catch (Exception e)
+            {
+                if (e.Message == "User not found")
+                {
+                    return BadRequest(new ResBaseDto<object>
+                    {
+                        Success = false,
+                        Message = e.Message,
+                        Data = null
+                    });
+                }
+
+                return StatusCode(StatusCodes.Status500InternalServerError, new ResBaseDto<object>
+                {
+                    Success = false,
+                    Message = e.Message,
+                    Data = null
+                });
+            }
+        }
+
+        [HttpGet]
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> GetUserById(string id)
+        {
+            try
+            {
+                var res = await _userServices.GetUserById(id);
+
+                return Ok(new ResBaseDto<ResUserByIdDto>
+                {
+                    Success = true,
+                    Message = "User found",
+                    Data = res
+                });
+            }
+            catch (Exception e)
+            {
+                if (e.Message == "User not found")
+                {
+                    return BadRequest(new ResBaseDto<object>
+                    {
+                        Success = false,
+                        Message = e.Message,
+                        Data = null
+                    });
+                }
+
+                return StatusCode(StatusCodes.Status500InternalServerError, new ResBaseDto<object>
+                {
+                    Success = false,
+                    Message = e.Message,
+                    Data = null
+                });
+            }
+        }
+
+
+        [HttpGet]
+        [Authorize(Roles = "admin,lender,borrower")]
+        public async Task<IActionResult> Profile()
+        {
+            try
+            {
+                var userId = HttpContext.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.Sid).Value;
+                var res = await _userServices.GetUserById(userId);
+
+                return Ok(new ResBaseDto<ResUserByIdDto>
+                {
+                    Success = true,
+                    Message = "Succesfully get profile",
+                    Data = res
+                });
+            }
+            catch (Exception e)
+            {
+                if (e.Message == "User not found")
+                {
+                    return BadRequest(new ResBaseDto<object>
+                    {
+                        Success = false,
+                        Message = e.Message,
+                        Data = null
+                    });
+                }
+
+                return StatusCode(StatusCodes.Status500InternalServerError, new ResBaseDto<object>
+                {
+                    Success = false,
+                    Message = e.Message,
+                    Data = null
+                });
+            }
+        }
+
+        [HttpPut]
+        [Authorize(Roles = "lender")]
+        public async Task<IActionResult> TopUp([FromBody] ReqTopUpUserDto data)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState
+                        .Where(x => x.Value.Errors.Any())
+                        .Select(x => new
+                        {
+                            Field = x.Key,
+                            Messages = x.Value.Errors.Select(e => e.ErrorMessage).ToList()
+                        }).ToList();
+
+                    var errorMessages = new StringBuilder("Validation Errors Occured!");
+
+                    return BadRequest(new ResBaseDto<object>
+                    {
+                        Success = false,
+                        Message = errorMessages.ToString(),
+                        Data = errors
+                    });
+                }
+
+                var userId = HttpContext.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.Sid).Value;
+                var res = await _userServices.TopUp(userId, data.Balance);
+
+                return Ok(new ResBaseDto<object>
+                {
+                    Success = true,
+                    Message = "Top up successfully",
                     Data = res
                 });
             }
